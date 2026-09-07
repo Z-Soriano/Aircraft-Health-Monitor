@@ -107,7 +107,6 @@ try:
             #     f"Battery: {messageDict['battery']:.1f}% | "
             #     f"Temperature: {messageDict['temp']:.1f}°C"
             # )
-            saveReading(logFile, messageDict, warnings)
 
             sequenceNumber = messageDict.get("sequenceNumber")
             if highestSequenceNumber is None:
@@ -123,9 +122,13 @@ try:
                     f"but received {sequenceNumber}. "
                     f"Possibly missed {missingCount} message(s)."
                 )
+            elif sequenceNumber < highestSequenceNumber + 1:
+                print(f"Out of order sequence, expected: {highestSequenceNumber+1}, but received {sequenceNumber}.")
+                continue
             else:
                 print(f"Expected sequence number {highestSequenceNumber+1}, but received {sequenceNumber}.")
             highestSequenceNumber = sequenceNumber
+            saveReading(logFile, messageDict, warnings)
 
         # continue loop if timeout occurs, this allows a constant refresh and check for KeyboardInterrupt
         except socket.timeout:
