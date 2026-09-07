@@ -15,6 +15,7 @@ def generateTelemetry(previous):
     newTelemetry = previous.copy()
 
     # simulate changes in telemetry data
+    newTelemetry['sequenceNumber'] += 1
     newTelemetry["timestamp"] = datetime.now(timezone.utc).isoformat()
     newTelemetry['altitude'] += random.randint(-100, 100)
     newTelemetry['speed'] += random.randint(-5, 5)
