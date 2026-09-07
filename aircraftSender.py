@@ -21,7 +21,7 @@ telemetry = {
     "sequenceNumber": 8,
     "altitude": 500,
     "speed": 40,
-    "battery": 10,
+    "battery": 101,
     "temp": 110
 }
 

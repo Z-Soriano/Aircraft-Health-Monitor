@@ -5,6 +5,73 @@ from healthMonitor import checkHealth
 from flightLogger import createFlightLog, saveReading
 from flightSummary import summarizeFlight
 
+from jsonschema import FormatChecker, validate
+from jsonschema.exceptions import SchemaError, ValidationError
+jsonSchema = {
+    "type": "object",
+    "properties": {
+        "sequenceNumber": {
+            "type": "integer",
+            "minimum": 1
+        },
+        "timestamp": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "altitude": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100000
+        },
+        "speed": {
+            "type": "number",
+            "minimum": 0
+        },
+        "battery": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+        },
+        "temp": {
+            "type": "number",
+            "minimum": -50,
+            "maximum": 150
+        }
+    },
+    "required": [
+        "sequenceNumber",
+        "timestamp",
+        "altitude",
+        "speed",
+        "battery",
+        "temp"
+    ],
+    "additionalProperties": False
+}
+def validateMessage(message):
+    try:
+        messageDict = json.loads(message)
+
+        validate(
+            instance=messageDict,
+            schema=jsonSchema,
+            format_checker=FormatChecker()
+        )
+
+    except json.JSONDecodeError as error:
+        print(f"Syntax Error: Invalid JSON -> {error.msg}")
+        return None
+
+    except ValidationError as error:
+        print(f"Data Error: Invalid telemetry -> {error.message}")
+        return None
+
+    except SchemaError as error:
+        print(f"Schema Error: The validation schema is incorrect -> {error.message}")
+        return None
+
+    print("Telemetry message is valid.")
+    return messageDict
 UDP_IP = "127.0.0.1"
 UDP_PORT = 5005
 bufferSize = 1024
@@ -28,9 +95,10 @@ try:
         try:
             data, addr = sock.recvfrom(bufferSize)
             message = data.decode("utf-8")
-            messageDict = json.loads(message)
+            messageDict = validateMessage(message)
+            if messageDict is None:
+                continue
             # print(f"Received message from {addr}: \n {messageDict}")
-
             warnings = checkHealth(messageDict)
             # print(
             #     f"Time: {messageDict['timestamp']} | "
