@@ -72,71 +72,77 @@ def validateMessage(message):
 
     print("Telemetry message is valid.")
     return messageDict
-UDP_IP = "127.0.0.1"
-UDP_PORT = 5005
-bufferSize = 1024
 
-sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+def runGroundStation(stopEvent=None, onAcceptedReading=None):
+    UDP_IP = "127.0.0.1"
+    UDP_PORT = 5005
+    bufferSize = 1024
 
-# binds socket to specified ip and port
-sock.bind((UDP_IP, UDP_PORT))
+    sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 
-sock.settimeout(1.0)
+    # binds socket to specified ip and port
+    sock.bind((UDP_IP, UDP_PORT))
 
-print("Ground Station server up and listening")
+    sock.settimeout(1.0)
 
-highestSequenceNumber = None
-logFile = createFlightLog()
-print(f"Saving flight data to: {logFile}")
-# try to receive data in a loop, and handle KeyboardInterrupt for shutdown
-try:
-    while True:
-        # recvfrom() blocks until data arrives
-        try:
-            data, addr = sock.recvfrom(bufferSize)
-            message = data.decode("utf-8")
-            messageDict = validateMessage(message)
-            if messageDict is None:
+    print("Ground Station server up and listening")
+
+    highestSequenceNumber = None
+    logFile = createFlightLog()
+    print(f"Saving flight data to: {logFile}")
+    # try to receive data in a loop, and handle KeyboardInterrupt for shutdown
+    try:
+        while stopEvent is None or not stopEvent.is_set():
+            # recvfrom() blocks until data arrives
+            try:
+                data, addr = sock.recvfrom(bufferSize)
+                message = data.decode("utf-8")
+                messageDict = validateMessage(message)
+                if messageDict is None:
+                    continue
+                # print(f"Received message from {addr}: \n {messageDict}")
+                warnings = checkHealth(messageDict)
+                # print(
+                #     f"Time: {messageDict['timestamp']} | "
+                #     f"Altitude: {messageDict['altitude']:.1f} ft | "
+                #     f"Speed: {messageDict['speed']:.1f} mph | "
+                #     f"Battery: {messageDict['battery']:.1f}% | "
+                #     f"Temperature: {messageDict['temp']:.1f}°C"
+                # )
+
+                sequenceNumber = messageDict.get("sequenceNumber")
+                if highestSequenceNumber is None:
+                    print(f"Received first sequence: {sequenceNumber}")
+                elif sequenceNumber == highestSequenceNumber + 1:
+                    print(f"Received expected sequence: {sequenceNumber}")
+
+                elif sequenceNumber > highestSequenceNumber + 1:
+                    expectedSequenceNumber = highestSequenceNumber + 1
+                    missingCount = sequenceNumber - expectedSequenceNumber
+                    print(
+                        f"WARNING: Expected sequence {expectedSequenceNumber}, "
+                        f"but received {sequenceNumber}. "
+                        f"Possibly missed {missingCount} message(s)."
+                    )
+                elif sequenceNumber < highestSequenceNumber + 1:
+                    print(f"Out of order sequence, expected: {highestSequenceNumber+1}, but received {sequenceNumber}.")
+                    continue
+                else:
+                    print(f"Expected sequence number {highestSequenceNumber+1}, but received {sequenceNumber}.")
+                highestSequenceNumber = sequenceNumber
+                saveReading(logFile, messageDict, warnings)
+                if onAcceptedReading is not None:
+                    onAcceptedReading(messageDict)
+            # continue loop if timeout occurs, this allows a constant refresh and check for KeyboardInterrupt
+            except socket.timeout:
                 continue
-            # print(f"Received message from {addr}: \n {messageDict}")
-            warnings = checkHealth(messageDict)
-            # print(
-            #     f"Time: {messageDict['timestamp']} | "
-            #     f"Altitude: {messageDict['altitude']:.1f} ft | "
-            #     f"Speed: {messageDict['speed']:.1f} mph | "
-            #     f"Battery: {messageDict['battery']:.1f}% | "
-            #     f"Temperature: {messageDict['temp']:.1f}°C"
-            # )
+    except KeyboardInterrupt:
+        print("\nReceiver shutting down immediately.")
+        print(f"Flight data saved to: {logFile}")
+    finally:
+        sock.close()   
 
-            sequenceNumber = messageDict.get("sequenceNumber")
-            if highestSequenceNumber is None:
-                print(f"Received first sequence: {sequenceNumber}")
-            elif sequenceNumber == highestSequenceNumber + 1:
-                print(f"Received expected sequence: {sequenceNumber}")
+    summarizeFlight(logFile)
 
-            elif sequenceNumber > highestSequenceNumber + 1:
-                expectedSequenceNumber = highestSequenceNumber + 1
-                missingCount = sequenceNumber - expectedSequenceNumber
-                print(
-                    f"WARNING: Expected sequence {expectedSequenceNumber}, "
-                    f"but received {sequenceNumber}. "
-                    f"Possibly missed {missingCount} message(s)."
-                )
-            elif sequenceNumber < highestSequenceNumber + 1:
-                print(f"Out of order sequence, expected: {highestSequenceNumber+1}, but received {sequenceNumber}.")
-                continue
-            else:
-                print(f"Expected sequence number {highestSequenceNumber+1}, but received {sequenceNumber}.")
-            highestSequenceNumber = sequenceNumber
-            saveReading(logFile, messageDict, warnings)
-
-        # continue loop if timeout occurs, this allows a constant refresh and check for KeyboardInterrupt
-        except socket.timeout:
-            continue
-except KeyboardInterrupt:
-    print("\nReceiver shutting down immediately.")
-    print(f"Flight data saved to: {logFile}")
-finally:
-    sock.close()   
-
-summarizeFlight(logFile)
+if __name__ == "__main__":
+    runGroundStation()
