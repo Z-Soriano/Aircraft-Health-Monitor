@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 fieldNames = [
+    "sequenceNumber",
     "timestamp",
     "altitudeFt",
     "speedMph",
@@ -35,6 +36,7 @@ def saveReading(filePath, telemetry, healthWarnings):
     warningText = "; ".join(healthWarnings)
 
     row = {
+        "sequenceNumber": telemetry["sequenceNumber"],
         "timestamp": telemetry["timestamp"],
         "altitudeFt": round(telemetry["altitude"], 2),
         "speedMph": round(telemetry["speed"], 2),
